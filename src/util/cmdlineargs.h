@@ -34,6 +34,7 @@ class CmdlineArgs final {
     void setSettingsPath(const QString& newSettingsPath) {
         m_settingsPath = newSettingsPath;
     }
+    int getOscPort() const { return m_oscPort; }
     const QString& getResourcePath() const { return m_resourcePath; }
     const QString& getPluginPath() const { return m_pluginPath; }
     const QString& getTimelinePath() const { return m_timelinePath; }
@@ -48,6 +49,7 @@ class CmdlineArgs final {
     bool m_safeMode;
     bool m_debugAssertBreak;
     bool m_settingsPathSet; // has --settingsPath been set on command line ?
+    int m_oscPort;
     mixxx::LogLevel m_logLevel; // Level of stderr logging message verbosity
     mixxx::LogLevel m_logFlushLevel; // Level of mixx.log file flushing
     QString m_locale;

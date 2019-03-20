@@ -374,7 +374,13 @@ void MixxxMainWindow::initialize(QApplication* pApp, const CmdlineArgs& args) {
     // but do not set up controllers until the end of the application startup
     // (long)
     qDebug() << "Creating ControllerManager";
-    m_pControllerManager = new ControllerManager(pConfig);
+    m_pControllerManager = new ControllerManager(pConfig, m_cmdLineArgs.getOscPort());
+
+    connect(m_pControllerManager, SIGNAL(loadTrackToGroup(QString, QString)),
+        m_pPlayerManager, SLOT(slotLoadToPlayer(QString, QString)));
+
+    connect(m_pPlayerManager, SIGNAL(loadLocationToPlayer(QString, QString)),
+        m_pControllerManager, SLOT(locationLoadedToPlayer(QString, QString)));
 
     launchProgress(47);
 

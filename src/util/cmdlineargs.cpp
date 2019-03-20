@@ -13,6 +13,7 @@ CmdlineArgs::CmdlineArgs()
       m_safeMode(false),
       m_debugAssertBreak(false),
       m_settingsPathSet(false),
+      m_oscPort(0),
       m_logLevel(mixxx::kLogLevelDefault),
       m_logFlushLevel(mixxx::kLogFlushLevelDefault),
 // We are not ready to switch to XDG folders under Linux, so keeping $HOME/.mixxx as preferences folder. see lp:1463273
@@ -91,6 +92,8 @@ warnings and errors to the console unless this is set properly.\n", stdout);
 when a critical error occurs unless this is set properly.\n", stdout);
             }
             i++;
+        } else if (argv[i] == QString("--oscPort") && i+1 < argc) {
+            m_oscPort = QString(argv[i+1]).toInt();
         } else if (QString::fromLocal8Bit(argv[i]).contains("--midiDebug", Qt::CaseInsensitive) ||
                    QString::fromLocal8Bit(argv[i]).contains("--controllerDebug", Qt::CaseInsensitive)) {
             m_midiDebug = true;
@@ -138,6 +141,10 @@ void CmdlineArgs::printUsage() {
     fprintf(stdout, "\
                         %s\n", getSettingsPath().toLocal8Bit().constData());
     fputs("\
+\n\
+--oscPort               Mixxx will listen for OSC messages on this port.\n\
+                        If zero or not set, Mixxx will not listen for\n\
+                        OSC messages.\n\
 \n\
 --controllerDebug       Causes Mixxx to display/log all of the controller\n\
                         data it receives and script functions it loads\n\

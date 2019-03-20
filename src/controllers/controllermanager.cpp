@@ -57,7 +57,7 @@ bool controllerCompare(Controller *a,Controller *b) {
     return a->getName() < b->getName();
 }
 
-ControllerManager::ControllerManager(UserSettingsPointer pConfig)
+ControllerManager::ControllerManager(UserSettingsPointer pConfig, int oscPort)
         : QObject(),
           m_pConfig(pConfig),
           // WARNING: Do not parent m_pControllerLearningEventFilter to
@@ -65,7 +65,10 @@ ControllerManager::ControllerManager(UserSettingsPointer pConfig)
           // its own event loop.
           m_pControllerLearningEventFilter(new ControllerLearningEventFilter()),
           m_pollTimer(this),
-          m_skipPoll(false) {
+          m_oscPollTimer(this),
+          m_skipPoll(false),
+          m_oscPort(oscPort),
+          m_pollingOsc(false) {
     qRegisterMetaType<ControllerPresetPointer>("ControllerPresetPointer");
 
     // Create controller mapping paths in the user's home directory.
@@ -78,6 +81,12 @@ ControllerManager::ControllerManager(UserSettingsPointer pConfig)
     m_pollTimer.setInterval(kPollIntervalMillis);
     connect(&m_pollTimer, SIGNAL(timeout()),
             this, SLOT(pollDevices()));
+
+    if (m_oscPort) {
+        // Should OSC use a different polling interval?
+        m_oscPollTimer.setInterval(kPollIntervalMillis);
+        connect(&m_oscPollTimer, SIGNAL(timeout()), this, SLOT(pollOsc()));
+    }
 
     m_pThread = new QThread;
     m_pThread->setObjectName("Controller");
@@ -140,6 +149,9 @@ void ControllerManager::slotInitialize() {
 }
 
 void ControllerManager::slotShutdown() {
+    if (m_pollingOsc) {
+        stopPollingOsc();
+    }
     stopPolling();
 
     // Clear m_enumerators before deleting the enumerators to prevent other code
@@ -259,6 +271,9 @@ void ControllerManager::slotSetUpDevices() {
     }
 
     maybeStartOrStopPolling();
+    if (m_oscPort > 0) {
+        setUpOsc();
+    }
 }
 
 void ControllerManager::maybeStartOrStopPolling() {
@@ -290,6 +305,20 @@ void ControllerManager::startPolling() {
 void ControllerManager::stopPolling() {
     m_pollTimer.stop();
     qDebug() << "Controller polling stopped.";
+}
+
+void ControllerManager::startPollingOsc() {
+    if (!m_oscPollTimer.isActive()) {
+        m_oscPollTimer.start();
+        m_pollingOsc = true;
+        qDebug() << "OSC polling started.";
+    }
+}
+
+void ControllerManager::stopPollingOsc() {
+    m_oscPollTimer.stop();
+    m_pollingOsc = false;
+    qDebug() << "OSC polling stopped.";
 }
 
 void ControllerManager::pollDevices() {
@@ -518,4 +547,103 @@ bool ControllerManager::importScript(const QString& scriptPath,
 
     *newScriptFileName = scriptFileName;
     return true;
+}
+
+void ControllerManager::setUpOsc() {
+    if (m_oscPort <= 0) {
+        return;
+    }
+
+    m_sock.bindTo(m_oscPort);
+    if (m_sock.isOk()) {
+        startPollingOsc();
+    } else {
+        qWarning() << "Could not set up OSC server on port" << QString::number(m_oscPort);
+    }
+}
+
+void ControllerManager::pollOsc() {
+    double value;
+    std::string group, key, location;
+
+    // Should 30ms timeout be adjusted?
+    if (m_sock.isOk() && m_sock.receiveNextPacket(30)) {
+        m_pr.init(m_sock.packetData(), m_sock.packetSize());
+        oscpkt::Message *msg;
+        while (m_pr.isOk() && (msg = m_pr.popMessage()) != 0) {
+            if (msg->match("/getcontrol").popStr(group).popStr(key).isOkNoMoreArgs()) {
+                handleOscGet(group, key);
+            } else if (msg->match("/setcontrol").popStr(group).popStr(key).popDouble(value).isOkNoMoreArgs()) {
+                handleOscSet(group, key, value);
+            } else if (msg->match("/loadtogroup").popStr(group).popStr(location).isOkNoMoreArgs()) {
+                handleOscLoad(group, location);
+            } else {
+                qWarning() << "Unhandled OSC message" << QString::fromStdString(msg->addressPattern());
+            }
+        }
+    }
+}
+
+void ControllerManager::handleOscGet(const std::string& group, const std::string& key) {
+    auto pProxy = std::make_unique<ControlProxy>(
+        QString::fromStdString(group),
+        QString::fromStdString(key)
+    );
+    if (!pProxy) {
+        return;
+    }
+
+    double value = pProxy->get();
+
+    oscpkt::Message msg;
+    msg.init("/mixxxcontrol").pushStr(group).pushStr(key).pushDouble(value);
+    m_pw.init().addMessage(msg);
+    // m_sock.packetOrigin() is safe here because this function is called
+    // immediately after receiving a /get packet
+    m_sock.sendPacketTo(m_pw.packetData(), m_pw.packetSize(), m_sock.packetOrigin());
+}
+
+void ControllerManager::handleOscSet(const std::string& group, const std::string& key, double value) {
+    auto pProxy = std::make_unique<ControlProxy>(
+        QString::fromStdString(group),
+        QString::fromStdString(key)
+    );
+    if (!pProxy) {
+        return;
+    }
+
+    pProxy->set(value);
+}
+
+void ControllerManager::handleOscLoad(const std::string& group, const std::string& location) {
+    // Stop group before attempting to load media
+    auto pProxy = std::make_unique<ControlProxy>(
+        QString::fromStdString(group),
+        "play"
+    );
+    if (pProxy) {
+        pProxy->set(0.0);
+    }
+
+    emit(loadTrackToGroup(QString::fromStdString(location), QString::fromStdString(group)));
+}
+
+void ControllerManager::locationLoadedToPlayer(QString location, QString group) {
+    oscpkt::Message msg;
+
+    // toLatin1() is the closest Qt offers to ASCII encoding a QString
+    // OSC specification requires all strings to use ASCII encoding
+    msg.init("/mixxxloaded").pushStr(group.toLatin1().constData()).pushStr(location.toLatin1().constData());
+    m_pw.init().addMessage(msg);
+
+    // WARNING: m_sock.packetOrigin() may not be the correct client to
+    // which this message should be returned if multiple clients are
+    // connected (since loading a track may take long enough that
+    // another message has been sent after the loadtogroup message).
+    //
+    // Perhaps we should store some sort of map that keeps track of
+    // which socket address requested which location/group, and then
+    // match the location and group parameters here with that map to
+    // determine the correct destination.
+    m_sock.sendPacketTo(m_pw.packetData(), m_pw.packetSize(), m_sock.packetOrigin());
 }
