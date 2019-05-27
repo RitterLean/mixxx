@@ -37,6 +37,15 @@ public:
 
 public slots:
   void sendState();
+  void loadData();
+  // void playing();
+  void speed();
+  void sendVolume();
+  void sendEQ(QString eqtype);
+  void sendHighs();
+  void sendMids();
+  void sendLows();
+
   void maybeSendState();
   void connectServer();
 

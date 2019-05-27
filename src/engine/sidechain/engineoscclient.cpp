@@ -34,22 +34,51 @@ EngineOscClient::EngineOscClient(UserSettingsPointer &pConfig)
 
   connectServer();
 
-  ControlProxy *xfader =
-      new ControlProxy(ConfigKey("[Master]", "crossfader"), this);
-  xfader->connectValueChanged(this, &EngineOscClient::maybeSendState);
-  m_connectedControls.append(xfader);
+  // ControlProxy *xfader =
+  //     new ControlProxy(ConfigKey("[Master]", "crossfader"), this);
+  // xfader->connectValueChanged(this, &EngineOscClient::maybeSendState);
+  // m_connectedControls.append(xfader);
 
   // connect play buttons
   for (int deckNr = 0; deckNr < (int)PlayerManager::numDecks(); deckNr++) {
+
     ControlProxy *play = new ControlProxy(
         ConfigKey(PlayerManager::groupForDeck(deckNr), "play"), this);
-    play->connectValueChanged(this, &EngineOscClient::maybeSendState);
+    play->connectValueChanged(this, &EngineOscClient::loadData);
     m_connectedControls.append(play);
+
+    // ControlProxy *trackload = new ControlProxy(
+    //     ConfigKey(PlayerManager::groupForDeck(deckNr), "track_loaded"), this);
+    // trackload->connectValueChanged(this, &EngineOscClient::loadData);
+    // m_connectedControls.append(trackload);
+
+    ControlProxy *rate = new ControlProxy(ConfigKey(PlayerManager::groupForDeck(deckNr), "rate"), this);
+    rate->connectValueChanged(this, &EngineOscClient::speed);
+    m_connectedControls.append(rate);
 
     ControlProxy *volume = new ControlProxy(
         ConfigKey(PlayerManager::groupForDeck(deckNr), "volume"), this);
-    volume->connectValueChanged(this, &EngineOscClient::maybeSendState);
+    volume->connectValueChanged(this, &EngineOscClient::sendVolume);
     m_connectedControls.append(volume);
+
+    QString equalizerRackString= "[EqualizerRack1_";
+    QString effectString= "_Effect1]";
+    QString eqChannel = equalizerRackString + PlayerManager::groupForDeck(deckNr) + effectString;
+
+    ControlProxy *highs = new ControlProxy(
+        ConfigKey(eqChannel, "parameter3"), this);
+    highs->connectValueChanged(this, &EngineOscClient::sendHighs);
+    m_connectedControls.append(highs);
+
+    ControlProxy *mids = new ControlProxy(
+        ConfigKey(eqChannel, "parameter2"), this);
+    mids->connectValueChanged(this, &EngineOscClient::sendMids);
+    m_connectedControls.append(mids);
+
+    ControlProxy *lows = new ControlProxy(
+        ConfigKey(eqChannel, "parameter1"), this);
+    lows->connectValueChanged(this, &EngineOscClient::sendLows);
+    m_connectedControls.append(lows);
   }
 
   // connect to settings changes
@@ -60,57 +89,144 @@ EngineOscClient::EngineOscClient(UserSettingsPointer &pConfig)
 EngineOscClient::~EngineOscClient() {}
 
 void EngineOscClient::process(const CSAMPLE *pBuffer, const int iBufferSize) {
-  if (m_time.elapsed() < 10)
-    return;
-  sendState();
+  // if (m_time.elapsed() < 10)
+  //   return;
+  // sendState();
 }
 
 void EngineOscClient::sendState() {
-  PlayerInfo &playerInfo = PlayerInfo::instance();
-  int numDecks = (int)PlayerManager::numDecks();
-  lo_send(m_serverAddress, "/mixxx/numDecks", "i", numDecks);
+  // PlayerInfo &playerInfo = PlayerInfo::instance();
+  // int numDecks = (int)PlayerManager::numDecks();
+  // lo_send(m_serverAddress, "/mixxx/numDecks", "i", numDecks);
 
-  for (int deckNr = 0; deckNr < numDecks; deckNr++) {
-    lo_send(m_serverAddress, "/mixxx/deck/playing", "ii", deckNr,
-            (int)playerInfo.isDeckPlaying(deckNr));
-    lo_send(m_serverAddress, "/mixxx/deck/volume", "if", deckNr,
-            playerInfo.getDeckVolume(deckNr));
+  // for (int deckNr = 0; deckNr < numDecks; deckNr++) {
 
-    // speed
-    ControlProxy rate(ConfigKey(PlayerManager::groupForDeck(deckNr), "rate"));
-    ControlProxy rateRange(
-        ConfigKey(PlayerManager::groupForDeck(deckNr), "rateRange"));
-    ControlProxy rev(ConfigKey(PlayerManager::groupForDeck(deckNr), "reverse"));
-    float speed = 1 + float(rate.get()) * float(rateRange.get());
-    if (rev.get())
-      speed *= -1;
-    lo_send(m_serverAddress, "/mixxx/deck/speed", "if", deckNr, speed);
+  //   lo_send(m_serverAddress, "/mixxx/deck/playing", "ii", deckNr,
+  //           (int)playerInfo.isDeckPlaying(deckNr));
+  //   lo_send(m_serverAddress, "/mixxx/deck/volume", "if", deckNr,
+  //           playerInfo.getDeckVolume(deckNr));
 
-    ControlProxy posRel(
-        ConfigKey(PlayerManager::groupForDeck(deckNr), "playposition"));
-    lo_send(m_serverAddress, "/mixxx/deck/pos", "if", deckNr,
-            float(posRel.get()));
+  //   // speed
+  //   ControlProxy rate(ConfigKey(PlayerManager::groupForDeck(deckNr), "rate"));
+  //   ControlProxy rateRange(
+  //       ConfigKey(PlayerManager::groupForDeck(deckNr), "rateRange"));
+  //   ControlProxy rev(ConfigKey(PlayerManager::groupForDeck(deckNr), "reverse"));
+  //   float speed = 1 + float(rate.get()) * float(rateRange.get());
+  //   if (rev.get())
+  //     speed *= -1;
+  //   lo_send(m_serverAddress, "/mixxx/deck/speed", "if", deckNr, speed);
 
-    ControlProxy dur(
-        ConfigKey(PlayerManager::groupForDeck(deckNr), "duration"));
-    lo_send(m_serverAddress, "/mixxx/deck/duration", "if", deckNr,
-            float(dur.get()));
-
-    QString title = "";
-    TrackPointer pTrack =
-        playerInfo.getTrackInfo(PlayerManager::groupForDeck(deckNr));
-    if (pTrack) {
-      title = pTrack->getTitle();
-    }
-    lo_send(m_serverAddress, "/mixxx/deck/title", "is", deckNr,
-            title.toUtf8().data());
-  }
-  m_time.restart();
+  // }
+  // m_time.restart();
 }
 
+void EngineOscClient::sendEQ(QString input)
+{
+  // qWarning() << "Input" << input;
+  // PlayerInfo &playerInfo = PlayerInfo::instance();
+  int numDecks = (int)PlayerManager::numDecks();
+  QString equalizerRackString= "[EqualizerRack1_";
+  QString effectString= "_Effect1]";
+  
+  for (int deckNr = 0; deckNr < numDecks; deckNr++) {
+    QString eqChannel = equalizerRackString + PlayerManager::groupForDeck(deckNr) + effectString;
+    // qWarning() << EngineOscClient::highs;
+    if (deckNr < 2) {
+          ControlProxy eq(ConfigKey(eqChannel, input));
+    // qWarning() << "Sending EQ value" << highs.get();
+    // qWarning() << "Sending EQ value default" << highs.getDefault();
+    // qWarning() << "Sending EQ on Deck" << deckNr << input << float(eq.getParameter());
+    // qWarning() << m_serverAddress;
+    QString address = "/mixxx/deck/eq/" + input;
+    // qWarning() << "adress" << address;
+    lo_send(m_serverAddress, address.toUtf8().constData(), "if", deckNr, float(eq.getParameter()));
+    // lo_send(m_serverAddress, "/mixxx/deck/eq", "is", deckNr, float(eq.getParameter()));
+    //qWarning() << "Sending EQ Parameter" << deckNr << highs.getKey();
+    }
+  }
+}
+
+
+void EngineOscClient::sendHighs() 
+{
+  sendEQ("parameter3");
+}
+void EngineOscClient::sendMids() 
+{
+  sendEQ("parameter2");
+}
+void EngineOscClient::sendLows() 
+{
+  sendEQ("parameter1");
+}
+ 
+  void EngineOscClient::loadData() {
+
+    PlayerInfo &playerInfo = PlayerInfo::instance();
+    int numDecks = (int)PlayerManager::numDecks();
+    lo_send(m_serverAddress, "/mixxx/numDecks", "i", numDecks);
+
+    for (int deckNr = 0; deckNr < numDecks; deckNr++) {
+
+        ControlProxy dur(ConfigKey(PlayerManager::groupForDeck(deckNr), "duration"));
+        lo_send(m_serverAddress, "/mixxx/deck/duration", "if", deckNr, float(dur.get()));
+
+        lo_send(m_serverAddress, "/mixxx/deck/playing", "ii", deckNr,
+                (int)playerInfo.isDeckPlaying(deckNr));
+        // lo_send(m_serverAddress, "/mixxx/deck/volume", "if", deckNr,
+        //         playerInfo.getDeckVolume(deckNr));
+        TrackPointer pTrack = playerInfo.getTrackInfo(PlayerManager::groupForDeck(deckNr));
+        QString title = "";
+        QString artist ="";
+            if (pTrack) {  
+              // qWarning() << "new Song loaded";
+              title = pTrack->getTitle();
+              artist = pTrack->getArtist();
+            }
+        lo_send(m_serverAddress, "/mixxx/deck/title", "is", deckNr, title.toUtf8().data());
+        lo_send(m_serverAddress, "/mixxx/deck/artist", "is", deckNr, artist.toUtf8().data());
+
+    }
+
+  }
+
+
+  void EngineOscClient::speed() {
+      PlayerInfo &playerInfo = PlayerInfo::instance();
+      int numDecks = (int)PlayerManager::numDecks();
+      for (int deckNr = 0; deckNr < numDecks; deckNr++) {
+          ControlProxy rate(ConfigKey(PlayerManager::groupForDeck(deckNr), "rate"));
+          ControlProxy rateRange(
+              ConfigKey(PlayerManager::groupForDeck(deckNr), "rateRange"));
+          ControlProxy rev(ConfigKey(PlayerManager::groupForDeck(deckNr), "reverse"));
+          float speed = 1 + float(rate.get()) * float(rateRange.get());
+          TrackPointer pTrack = playerInfo.getTrackInfo(PlayerManager::groupForDeck(deckNr));
+          if (pTrack) {
+              double bpm = pTrack ->getBpm();
+              // qWarning() << speed * bpm;
+              lo_send(m_serverAddress, "/mixxx/deck/bpm", "if", deckNr, speed * bpm);
+              lo_send(m_serverAddress, "/mixxx/deck/speed", "if", deckNr, speed);
+          }
+          // float bpm = float(pTrack ->getBpm());    
+          // qWarning() << bpm;
+          // if (rev.get())
+          //   speed *= -1;
+          // lo_send(m_serverAddress, "/mixxx/deck/speed", "if", deckNr, speed);
+      }
+  }
+
+  void EngineOscClient::sendVolume() {
+      PlayerInfo &playerInfo = PlayerInfo::instance();
+      int numDecks = (int)PlayerManager::numDecks();
+      for (int deckNr = 0; deckNr < numDecks; deckNr++) {
+          lo_send(m_serverAddress, "/mixxx/deck/volume", "if", deckNr, playerInfo.getDeckVolume(deckNr));
+      }
+
+  }
+
 void EngineOscClient::maybeSendState() {
-  if (m_time.elapsed() < 10)
-    return;
+  // if (m_time.elapsed() < 10)
+  //   return;
   sendState();
 }
 
