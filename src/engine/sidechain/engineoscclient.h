@@ -40,6 +40,7 @@ public slots:
   void loadData();
   // void playing();
   void speed();
+  void position();
   void sendVolume();
   void sendEQ(QString eqtype);
   void sendHighs();

@@ -56,6 +56,14 @@ EngineOscClient::EngineOscClient(UserSettingsPointer &pConfig)
     rate->connectValueChanged(this, &EngineOscClient::speed);
     m_connectedControls.append(rate);
 
+    ControlProxy *playpos = new ControlProxy(ConfigKey(PlayerManager::groupForDeck(deckNr), "playposition"), this);
+    playpos->connectValueChanged(this, &EngineOscClient::position);
+    m_connectedControls.append(playpos);
+
+
+
+
+
     ControlProxy *volume = new ControlProxy(
         ConfigKey(PlayerManager::groupForDeck(deckNr), "volume"), this);
     volume->connectValueChanged(this, &EngineOscClient::sendVolume);
@@ -160,6 +168,19 @@ void EngineOscClient::sendLows()
   sendEQ("parameter1");
 }
  
+  void EngineOscClient::position() {
+
+    PlayerInfo &playerInfo = PlayerInfo::instance();
+    int numDecks = (int)PlayerManager::numDecks();
+    lo_send(m_serverAddress, "/mixxx/numDecks", "i", numDecks);
+
+    for (int deckNr = 0; deckNr < numDecks; deckNr++) {
+        ControlProxy posRel(ConfigKey(PlayerManager::groupForDeck(deckNr), "playposition"));
+        lo_send(m_serverAddress, "/mixxx/deck/pos", "if", deckNr, float(posRel.get()));
+    }
+
+  }
+
   void EngineOscClient::loadData() {
 
     PlayerInfo &playerInfo = PlayerInfo::instance();
@@ -186,10 +207,11 @@ void EngineOscClient::sendLows()
         lo_send(m_serverAddress, "/mixxx/deck/title", "is", deckNr, title.toUtf8().data());
         lo_send(m_serverAddress, "/mixxx/deck/artist", "is", deckNr, artist.toUtf8().data());
 
+        ControlProxy posRel(ConfigKey(PlayerManager::groupForDeck(deckNr), "playposition"));
+        lo_send(m_serverAddress, "/mixxx/deck/pos", "if", deckNr, float(posRel.get()));
     }
 
   }
-
 
   void EngineOscClient::speed() {
       PlayerInfo &playerInfo = PlayerInfo::instance();
