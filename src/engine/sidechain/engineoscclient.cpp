@@ -34,23 +34,25 @@ EngineOscClient::EngineOscClient(UserSettingsPointer &pConfig)
 
   connectServer();
 
-  // ControlProxy *xfader =
-  //     new ControlProxy(ConfigKey("[Master]", "crossfader"), this);
-  // xfader->connectValueChanged(this, &EngineOscClient::maybeSendState);
-  // m_connectedControls.append(xfader);
+  ControlProxy *xfader =
+      new ControlProxy(ConfigKey("[Master]", "crossfader"), this);
+  xfader->connectValueChanged(this, &EngineOscClient::sendVolume);
+  m_connectedControls.append(xfader);
 
   // connect play buttons
   for (int deckNr = 0; deckNr < (int)PlayerManager::numDecks(); deckNr++) {
 
     ControlProxy *play = new ControlProxy(
         ConfigKey(PlayerManager::groupForDeck(deckNr), "play"), this);
-    play->connectValueChanged(this, &EngineOscClient::loadData);
+    play->connectValueChanged(this, &EngineOscClient::playing);
     m_connectedControls.append(play);
 
-    // ControlProxy *trackload = new ControlProxy(
-    //     ConfigKey(PlayerManager::groupForDeck(deckNr), "track_loaded"), this);
-    // trackload->connectValueChanged(this, &EngineOscClient::loadData);
-    // m_connectedControls.append(trackload);
+    PlayerInfo &playerInfo = PlayerInfo::instance();
+
+    ControlProxy *cue = new ControlProxy(
+        ConfigKey(PlayerManager::groupForDeck(deckNr), "cue_default"), this);
+    cue->connectValueChanged(this, &EngineOscClient::loadData);
+    m_connectedControls.append(cue);
 
     ControlProxy *rate = new ControlProxy(ConfigKey(PlayerManager::groupForDeck(deckNr), "rate"), this);
     rate->connectValueChanged(this, &EngineOscClient::speed);
@@ -59,10 +61,6 @@ EngineOscClient::EngineOscClient(UserSettingsPointer &pConfig)
     ControlProxy *playpos = new ControlProxy(ConfigKey(PlayerManager::groupForDeck(deckNr), "playposition"), this);
     playpos->connectValueChanged(this, &EngineOscClient::position);
     m_connectedControls.append(playpos);
-
-
-
-
 
     ControlProxy *volume = new ControlProxy(
         ConfigKey(PlayerManager::groupForDeck(deckNr), "volume"), this);
@@ -102,31 +100,31 @@ void EngineOscClient::process(const CSAMPLE *pBuffer, const int iBufferSize) {
   // sendState();
 }
 
-void EngineOscClient::sendState() {
-  // PlayerInfo &playerInfo = PlayerInfo::instance();
-  // int numDecks = (int)PlayerManager::numDecks();
-  // lo_send(m_serverAddress, "/mixxx/numDecks", "i", numDecks);
+// void EngineOscClient::sendState() {
+//   // PlayerInfo &playerInfo = PlayerInfo::instance();
+//   // int numDecks = (int)PlayerManager::numDecks();
+//   // lo_send(m_serverAddress, "/mixxx/numDecks", "i", numDecks);
 
-  // for (int deckNr = 0; deckNr < numDecks; deckNr++) {
+//   // for (int deckNr = 0; deckNr < numDecks; deckNr++) {
 
-  //   lo_send(m_serverAddress, "/mixxx/deck/playing", "ii", deckNr,
-  //           (int)playerInfo.isDeckPlaying(deckNr));
-  //   lo_send(m_serverAddress, "/mixxx/deck/volume", "if", deckNr,
-  //           playerInfo.getDeckVolume(deckNr));
+//   //   lo_send(m_serverAddress, "/mixxx/deck/playing", "ii", deckNr,
+//   //           (int)playerInfo.isDeckPlaying(deckNr));
+//   //   lo_send(m_serverAddress, "/mixxx/deck/volume", "if", deckNr,
+//   //           playerInfo.getDeckVolume(deckNr));
 
-  //   // speed
-  //   ControlProxy rate(ConfigKey(PlayerManager::groupForDeck(deckNr), "rate"));
-  //   ControlProxy rateRange(
-  //       ConfigKey(PlayerManager::groupForDeck(deckNr), "rateRange"));
-  //   ControlProxy rev(ConfigKey(PlayerManager::groupForDeck(deckNr), "reverse"));
-  //   float speed = 1 + float(rate.get()) * float(rateRange.get());
-  //   if (rev.get())
-  //     speed *= -1;
-  //   lo_send(m_serverAddress, "/mixxx/deck/speed", "if", deckNr, speed);
+//   //   // speed
+//   //   ControlProxy rate(ConfigKey(PlayerManager::groupForDeck(deckNr), "rate"));
+//   //   ControlProxy rateRange(
+//   //       ConfigKey(PlayerManager::groupForDeck(deckNr), "rateRange"));
+//   //   ControlProxy rev(ConfigKey(PlayerManager::groupForDeck(deckNr), "reverse"));
+//   //   float speed = 1 + float(rate.get()) * float(rateRange.get());
+//   //   if (rev.get())
+//   //     speed *= -1;
+//   //   lo_send(m_serverAddress, "/mixxx/deck/speed", "if", deckNr, speed);
 
-  // }
-  // m_time.restart();
-}
+//   // }
+//   // m_time.restart();
+// }
 
 void EngineOscClient::sendEQ(QString input)
 {
@@ -182,10 +180,10 @@ void EngineOscClient::sendLows()
   }
 
   void EngineOscClient::loadData() {
-
+        
     PlayerInfo &playerInfo = PlayerInfo::instance();
     int numDecks = (int)PlayerManager::numDecks();
-    lo_send(m_serverAddress, "/mixxx/numDecks", "i", numDecks);
+    // lo_send(m_serverAddress, "/mixxx/numDecks", "i", numDecks);
 
     for (int deckNr = 0; deckNr < numDecks; deckNr++) {
 
@@ -208,9 +206,26 @@ void EngineOscClient::sendLows()
         lo_send(m_serverAddress, "/mixxx/deck/artist", "is", deckNr, artist.toUtf8().data());
 
         ControlProxy posRel(ConfigKey(PlayerManager::groupForDeck(deckNr), "playposition"));
-        lo_send(m_serverAddress, "/mixxx/deck/pos", "if", deckNr, float(posRel.get()));
+        // lo_send(m_serverAddress, "/mixxx/deck/pos", "if", deckNr, float(posRel.get()));
     }
 
+  }
+
+  void EngineOscClient::playing() {
+
+    PlayerInfo &playerInfo = PlayerInfo::instance();
+    int numDecks = (int)PlayerManager::numDecks();
+    // lo_send(m_serverAddress, "/mixxx/numDecks", "i", numDecks);
+
+    for (int deckNr = 0; deckNr < numDecks; deckNr++) {
+
+       
+        lo_send(m_serverAddress, "/mixxx/deck/playing", "ii", deckNr,
+                (int)playerInfo.isDeckPlaying(deckNr));
+        // lo_send(m_serverAddress, "/mixxx/deck/volume", "if", deckNr,
+        //         playerInfo.getDeckVolume(deckNr));
+        // lo_send(m_serverAddress, "/mixxx/deck/pos", "if", deckNr, float(posRel.get()));
+    }
   }
 
   void EngineOscClient::speed() {
@@ -229,11 +244,6 @@ void EngineOscClient::sendLows()
               lo_send(m_serverAddress, "/mixxx/deck/bpm", "if", deckNr, speed * bpm);
               lo_send(m_serverAddress, "/mixxx/deck/speed", "if", deckNr, speed);
           }
-          // float bpm = float(pTrack ->getBpm());    
-          // qWarning() << bpm;
-          // if (rev.get())
-          //   speed *= -1;
-          // lo_send(m_serverAddress, "/mixxx/deck/speed", "if", deckNr, speed);
       }
   }
 
@@ -243,14 +253,13 @@ void EngineOscClient::sendLows()
       for (int deckNr = 0; deckNr < numDecks; deckNr++) {
           lo_send(m_serverAddress, "/mixxx/deck/volume", "if", deckNr, playerInfo.getDeckVolume(deckNr));
       }
-
   }
 
-void EngineOscClient::maybeSendState() {
-  // if (m_time.elapsed() < 10)
-  //   return;
-  sendState();
-}
+// void EngineOscClient::maybeSendState() {
+//   // if (m_time.elapsed() < 10)
+//   //   return;
+//   sendState();
+// }
 
 void EngineOscClient::connectServer() {
   QString server =

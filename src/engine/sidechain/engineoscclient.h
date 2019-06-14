@@ -36,9 +36,9 @@ public:
   virtual ~EngineOscClient();
 
 public slots:
-  void sendState();
+  // void sendState();
   void loadData();
-  // void playing();
+  void playing();
   void speed();
   void position();
   void sendVolume();
@@ -47,7 +47,7 @@ public slots:
   void sendMids();
   void sendLows();
 
-  void maybeSendState();
+  // void maybeSendState();
   void connectServer();
 
   // interface SideChainWorker
